@@ -3,6 +3,7 @@ import { Options } from 'selenium-webdriver/chrome';
 import { URL } from 'url';
 import fetch from 'node-fetch';
 
+import { timeout } from './sleep';
 import indent from './indent';
 import mergeCoverageMap from './mergeCoverageMap';
 import parseURLParams from './parseURLParams';
@@ -26,11 +27,20 @@ global.runHTMLTest = async (
         .build()
     : builder
         .forBrowser('chrome')
-        .usingServer('http://localhost:9515/')
+        .usingServer('http://localhost:9515')
         .setChromeOptions(chromeOptions)
         .build();
 
-  const sessionId = (await driver.getSession()).getId();
+  const session = await Promise.race([
+    driver.getSession(),
+    timeout(
+      15000,
+      'Timed out while waiting for a Web Driver session. Probably there are more test runners running simultaneously than Web Driver sessions. Or some Web Driver sessions are hung.'
+    )
+  ]);
+
+  const sessionId = session.getId();
+
   const params = parseURLParams(new URL(url, 'http://webchat2/').hash);
 
   try {
@@ -81,12 +91,12 @@ global.runHTMLTest = async (
   } finally {
     // Using JSON Wire Protocol to kill Web Driver.
     // This is more reliable because Selenium package queue commands.
-    const res = await fetch(`http://localhost:4444/wd/hub/session/${sessionId}`, { method: 'DELETE' });
+    const res = await fetch(`${builder.getServerUrl()}/session/${sessionId}`, { method: 'DELETE' });
 
     if (!res.ok) {
       const json = await res.json();
 
-      throw new Error(`Failed to kill WebDriver session ${sessionId}.\n\n${json && json.value && json.value.message}`);
+      console.warn(`Failed to kill WebDriver session ${sessionId}.\n\n${json && json.value && json.value.message}`);
     }
   }
 };

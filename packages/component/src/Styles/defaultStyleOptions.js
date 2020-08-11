@@ -29,11 +29,12 @@ const DEFAULT_OPTIONS = {
   avatarBorderRadius: '50%',
   avatarSize: 40,
   botAvatarBackgroundColor: undefined, // defaults to accent color
-  botAvatarImage: '',
-  botAvatarInitials: '',
+  botAvatarImage: undefined, // Or a string of URL. Can be a data URI or blob.
+  botAvatarInitials: undefined, // Or a string. Empty strings means it has avatar but not initials inside.
   userAvatarBackgroundColor: undefined, // defaults to accent color
-  userAvatarImage: '',
-  userAvatarInitials: '',
+  userAvatarImage: undefined, // Or a string of URL. Can be a data URI or blob.
+  userAvatarInitials: undefined, // Or a string. Empty strings means it has avatar but not initials inside.
+  showAvatarInGroup: 'status', // Or 'sender' or true (on every activity).
 
   // Bubble
   // TODO: Should we make a bubbleFromBot*
@@ -47,15 +48,15 @@ const DEFAULT_OPTIONS = {
   bubbleFromUserBorderRadius: 2,
   bubbleFromUserBorderStyle: 'solid',
   bubbleFromUserBorderWidth: 1,
-  bubbleFromUserNubOffset: 'bottom',
-  bubbleFromUserNubSize: 0,
+  bubbleFromUserNubOffset: 0, // Either a positive/negative number, or "bottom"
+  bubbleFromUserNubSize: undefined, // Or a number. 0 means a sharp corner.
   bubbleFromUserTextColor: 'Black',
   bubbleImageHeight: 240,
   bubbleMaxWidth: 480, // screen width = 600px
   bubbleMinHeight: 40,
   bubbleMinWidth: 250, // min screen width = 300px, Edge requires 372px (https://developer.microsoft.com/en-us/microsoft-edge/platform/issues/13621468/)
-  bubbleNubOffset: 'bottom',
-  bubbleNubSize: 0,
+  bubbleNubOffset: 0, // Either a positive/negative number, or "bottom"
+  bubbleNubSize: undefined, // Or a number. 0 means a sharp corner.
   bubbleTextColor: 'Black',
 
   // Markdown
@@ -67,6 +68,7 @@ const DEFAULT_OPTIONS = {
   // Root
   rootHeight: '100%',
   rootWidth: '100%',
+  rootZIndex: 0, // "z-index" for the root container of Web Chat. This will form a new stacking context so "z-index" used in children won't pollute.
 
   // Scroll to end button
   hideScrollToEndButton: false,
@@ -110,8 +112,12 @@ const DEFAULT_OPTIONS = {
   suggestedActionDisabledTextColor: undefined, // defaults to subtle
   suggestedActionHeight: 40,
   suggestedActionImageHeight: 20,
-  suggestedActionLayout: 'carousel', // either "carousel" or "stacked"
+  suggestedActionLayout: 'carousel', // either 'carousel' or 'stacked'
   suggestedActionTextColor: null,
+
+  // Suggested actions 'stacked' layout
+  suggestedActionsStackedHeight: undefined, // defaults to 'auto'
+  suggestedActionsStackedOverflow: undefined, // defaults to 'auto'
 
   // Timestamp
   groupTimestamp: true,
@@ -121,6 +127,7 @@ const DEFAULT_OPTIONS = {
   timestampFormat: 'relative', // 'absolute'
 
   // Transcript overlay buttons (e.g. carousel and suggested action flippers, scroll to bottom, etc.)
+  newMessagesButtonFontSize: '85%',
   transcriptOverlayButtonBackground: 'rgba(0, 0, 0, .6)',
   transcriptOverlayButtonBackgroundOnFocus: 'rgba(0, 0, 0, .8)',
   transcriptOverlayButtonBackgroundOnHover: 'rgba(0, 0, 0, .8)',

@@ -1,4 +1,5 @@
 import { join } from 'path';
+import { Key } from 'selenium-webdriver';
 import { promisify } from 'util';
 import { tmpdir } from 'os';
 import createDeferred from 'p-defer';
@@ -19,11 +20,11 @@ export default async function runPageProcessor(driver, { ignoreConsoleError = fa
   const webChatTestLoaded = await driver.executeScript(() => !!window.WebChatTest);
 
   if (!webChatLoaded) {
-    throw new Error('"webchat.js" is not loaded on the page.');
+    throw new Error('"webchat.js" did not load on the page, or the page was not found.');
   }
 
   if (!webChatTestLoaded) {
-    throw new Error('"testharness.js" is not loaded on the page.');
+    throw new Error('"testharness.js" did not load on the page.');
   }
 
   if (await driver.executeScript(() => !(window.React && window.ReactDOM && window.ReactTestUtils))) {
@@ -58,7 +59,32 @@ export default async function runPageProcessor(driver, { ignoreConsoleError = fa
       try {
         let result;
 
-        if (job.type === 'snapshot') {
+        if (job.type === 'send keys') {
+          await job.payload.keys
+            .reduce((actions, key) => actions.sendKeys(Key[key] || key), driver.actions())
+            .perform();
+        } else if (job.type === 'send tab') {
+          await driver
+            .actions()
+            .sendKeys(Key.TAB)
+            .perform();
+        } else if (job.type === 'send shift tab') {
+          await driver
+            .actions()
+            .keyDown(Key.SHIFT)
+            .sendKeys(Key.TAB)
+            .keyUp(Key.SHIFT)
+            .perform();
+        } else if (job.type === 'send access key') {
+          await driver
+            .actions()
+            .keyDown(Key.ALT)
+            .keyDown(Key.SHIFT)
+            .sendKeys(job.payload.key)
+            .keyUp(Key.SHIFT)
+            .keyUp(Key.ALT)
+            .perform();
+        } else if (job.type === 'snapshot') {
           expect(await driver.takeScreenshot()).toMatchImageSnapshot(customImageSnapshotOptions);
         } else if (job.type === 'save file') {
           const filename = join(tmpdir(), `${Date.now()}-${job.payload.filename}`);
@@ -68,6 +94,8 @@ export default async function runPageProcessor(driver, { ignoreConsoleError = fa
           console.log(`Saved to ${filename}`);
 
           result = filename;
+        } else if (job.type === 'expect deprecation') {
+          result = (await driver.executeScript(() => window.WebChatTest.shiftDeprecationHistory())).length;
         } else {
           throw new Error(`Unknown job type "${job.type}".`);
         }

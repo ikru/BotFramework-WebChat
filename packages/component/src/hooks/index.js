@@ -4,6 +4,9 @@ import useAvatarForBot from './useAvatarForBot';
 import useAvatarForUser from './useAvatarForUser';
 import useByteFormatter from './useByteFormatter';
 import useConnectivityStatus from './useConnectivityStatus';
+import useCreateActivityRenderer from './useCreateActivityRenderer';
+import useCreateActivityStatusRenderer from './useCreateActivityStatusRenderer';
+import useCreateAvatarRenderer from './useCreateAvatarRenderer';
 import useDateFormatter from './useDateFormatter';
 import useDebouncedNotifications from './useDebouncedNotifications';
 import useDictateInterims from './useDictateInterims';
@@ -14,6 +17,7 @@ import useDismissNotification from './useDismissNotification';
 import useEmitTypingIndicator from './useEmitTypingIndicator';
 import useFocus from './useFocus';
 import useFocusSendBox from './useFocusSendBox';
+import useGetSendTimeoutForActivity from './useGetSendTimeoutForActivity';
 import useGrammars from './useGrammars';
 import useGroupTimestamp from './useGroupTimestamp';
 import useLanguage from './useLanguage';
@@ -22,6 +26,7 @@ import useLocalize from './useLocalize'; // Deprecated on or after 2022-02-12
 import useLocalizeDate from './useLocalizeDate'; // Deprecated on or after 2022-02-12
 import useLocalizer from './useLocalizer';
 import useMarkActivityAsSpoken from './useMarkActivityAsSpoken';
+import useObserveScrollPosition from './useObserveScrollPosition';
 import usePerformCardAction from './usePerformCardAction';
 import usePostActivity from './usePostActivity';
 import useReferenceGrammarID from './useReferenceGrammarID';
@@ -33,6 +38,7 @@ import useRenderAvatar from './useRenderAvatar';
 import useRenderMarkdownAsHTML from './useRenderMarkdownAsHTML';
 import useRenderToast from './useRenderToast';
 import useRenderTypingIndicator from './useRenderTypingIndicator';
+import useScrollTo from './useScrollTo';
 import useScrollToEnd from './useScrollToEnd';
 import useSendBoxValue from './useSendBoxValue';
 import useSendEvent from './useSendEvent';
@@ -72,6 +78,9 @@ export {
   useAvatarForUser,
   useByteFormatter,
   useConnectivityStatus,
+  useCreateActivityRenderer,
+  useCreateActivityStatusRenderer,
+  useCreateAvatarRenderer,
   useDateFormatter,
   useDebouncedNotifications,
   useDictateInterims,
@@ -82,6 +91,7 @@ export {
   useEmitTypingIndicator,
   useFocus,
   useFocusSendBox,
+  useGetSendTimeoutForActivity,
   useGrammars,
   useGroupTimestamp,
   useLanguage,
@@ -92,6 +102,7 @@ export {
   useMarkActivityAsSpoken,
   useMicrophoneButtonClick,
   useMicrophoneButtonDisabled,
+  useObserveScrollPosition,
   usePerformCardAction,
   usePostActivity,
   useReferenceGrammarID,
@@ -103,6 +114,7 @@ export {
   useRenderMarkdownAsHTML,
   useRenderToast,
   useRenderTypingIndicator,
+  useScrollTo,
   useScrollToEnd,
   useSendBoxSpeechInterimsVisible,
   useSendBoxValue,

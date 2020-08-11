@@ -1,8 +1,5 @@
 import { Composer as SayComposer } from 'react-say';
-import {
-  Composer as ScrollToBottomComposer,
-  FunctionContext as ScrollToBottomFunctionContext
-} from 'react-scroll-to-bottom';
+import { Composer as ScrollToBottomComposer } from 'react-scroll-to-bottom';
 
 import { css } from 'glamor';
 import { Provider } from 'react-redux';
@@ -11,7 +8,13 @@ import PropTypes from 'prop-types';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import updateIn from 'simple-update-in';
 
+import createActivityRenderer from './Middleware/createActivityRenderer';
+import createActivityStatusRenderer from './Middleware/createActivityStatusRenderer';
+import createAttachmentRenderer from './Middleware/createAttachmentRenderer';
+import createAvatarRenderer from './Middleware/createAvatarRenderer';
 import createCustomEvent from './Utils/createCustomEvent';
+import createToastRenderer from './Middleware/createToastRenderer';
+import createTypingIndicatorRenderer from './Middleware/createTypingIndicatorRenderer';
 import ErrorBoundary from './ErrorBoundary';
 import getAllLocalizedStrings from './Localization/getAllLocalizedStrings';
 import isObject from './Utils/isObject';
@@ -50,6 +53,7 @@ import {
 import addTargetBlankToHyperlinksMarkdown from './Utils/addTargetBlankToHyperlinksMarkdown';
 import concatMiddleware from './Middleware/concatMiddleware';
 import createCoreCardActionMiddleware from './Middleware/CardAction/createCoreMiddleware';
+import createDefaultGroupActivitiesMiddleware from './Middleware/GroupActivities/createCoreMiddleware';
 import createStyleSet from './Styles/createStyleSet';
 import defaultSelectVoice from './defaultSelectVoice';
 import Dictation from './Dictation';
@@ -96,7 +100,7 @@ function createCardActionContext({ cardActionMiddleware, directLine, dispatch })
   const runMiddleware = concatMiddleware(cardActionMiddleware, createCoreCardActionMiddleware())({ dispatch });
 
   return {
-    onCardAction: cardAction =>
+    onCardAction: (cardAction, { target } = {}) =>
       runMiddleware(({ cardAction: { type } }) => {
         throw new Error(`Web Chat: received unknown card action "${type}"`);
       })({
@@ -120,32 +124,48 @@ function createCardActionContext({ cardActionMiddleware, directLine, dispatch })
 
                 return value;
               }
-            : null
+            : null,
+        target
       })
   };
 }
 
-function createFocusContext({ mainFocusRef, sendBoxRef }) {
+function createFocusContext({ sendBoxFocusRef, transcriptFocusRef }) {
   return {
     focus: where => {
-      const ref = where === 'sendBox' || where === 'sendBoxWithoutKeyboard' ? sendBoxRef : mainFocusRef;
+      const ref = where === 'sendBox' || where === 'sendBoxWithoutKeyboard' ? sendBoxFocusRef : transcriptFocusRef;
       const { current } = ref || {};
 
-      if (current && where === 'sendBoxWithoutKeyboard') {
-        // To not activate the virtual keyboard while changing focus to an input, we will temporarily set it as read-only and flip it back.
-        // https://stackoverflow.com/questions/7610758/prevent-iphone-default-keyboard-when-focusing-an-input/7610923
-        const readOnly = current.getAttribute('readonly');
+      if (current) {
+        if (where === 'sendBoxWithoutKeyboard') {
+          // To not activate the virtual keyboard while changing focus to an input, we will temporarily set it as read-only and flip it back.
+          // https://stackoverflow.com/questions/7610758/prevent-iphone-default-keyboard-when-focusing-an-input/7610923
+          const readOnly = current.getAttribute('readonly');
 
-        current.setAttribute('readonly', 'readonly');
+          current.setAttribute('readonly', 'readonly');
 
-        setTimeout(() => {
+          setTimeout(() => {
+            current.focus();
+            readOnly ? current.setAttribute('readonly', readOnly) : current.removeAttribute('readonly');
+          }, 0);
+        } else {
           current.focus();
-          readOnly ? current.setAttribute('readonly', readOnly) : current.removeAttribute('readonly');
-        }, 0);
-      } else {
-        current && current.focus();
+        }
       }
     }
+  };
+}
+
+function createGroupActivitiesContext({ groupActivitiesMiddleware, groupTimestamp }) {
+  const runMiddleware = concatMiddleware(
+    groupActivitiesMiddleware,
+    createDefaultGroupActivitiesMiddleware({ groupTimestamp })
+  )()(() => {
+    throw new Error('botframework-webchat internal: No middleware is execute for groupActivities.');
+  });
+
+  return {
+    groupActivities: ({ activities }) => runMiddleware({ activities })
   };
 }
 
@@ -170,9 +190,13 @@ function mergeStringsOverrides(localizedStrings, language, overrideLocalizedStri
 }
 
 const Composer = ({
+  activityMiddleware,
   activityRenderer,
+  activityStatusMiddleware,
   activityStatusRenderer,
+  attachmentMiddleware,
   attachmentRenderer,
+  avatarMiddleware,
   avatarRenderer,
   cardActionMiddleware,
   children,
@@ -181,29 +205,32 @@ const Composer = ({
   disabled,
   extraStyleSet,
   grammars,
+  groupActivitiesMiddleware,
   groupTimestamp,
   locale,
-  mainFocusRef,
   onTelemetry,
   overrideLocalizedStrings,
   renderMarkdown,
-  scrollToEnd,
   selectVoice,
-  sendBoxRef,
   sendTimeout,
   sendTypingIndicator,
   styleOptions,
   styleSet,
+  suggestedActionsAccessKey,
+  toastMiddleware,
   toastRenderer,
+  typingIndicatorMiddleware,
   typingIndicatorRenderer,
   userID,
   username,
   webSpeechPonyfillFactory
 }) => {
-  const dispatch = useDispatch();
-  const telemetryDimensionsRef = useRef({});
-  const [referenceGrammarID] = useReferenceGrammarID();
   const [dictateAbortable, setDictateAbortable] = useState();
+  const [referenceGrammarID] = useReferenceGrammarID();
+  const dispatch = useDispatch();
+  const sendBoxFocusRef = useRef();
+  const telemetryDimensionsRef = useRef({});
+  const transcriptFocusRef = useRef();
 
   const patchedDir = useMemo(() => (dir === 'ltr' || dir === 'rtl' ? dir : 'auto'), [dir]);
   const patchedGrammars = useMemo(() => grammars || [], [grammars]);
@@ -287,11 +314,23 @@ const Composer = ({
     selectVoice
   ]);
 
-  const focusContext = useMemo(() => createFocusContext({ mainFocusRef, sendBoxRef }), [mainFocusRef, sendBoxRef]);
+  const focusContext = useMemo(() => createFocusContext({ sendBoxFocusRef, transcriptFocusRef }), [
+    sendBoxFocusRef,
+    transcriptFocusRef
+  ]);
 
   const patchedStyleSet = useMemo(
     () => styleSetToClassNames({ ...(styleSet || createStyleSet(patchedStyleOptions)), ...extraStyleSet }),
     [extraStyleSet, patchedStyleOptions, styleSet]
+  );
+
+  const groupActivitiesContext = useMemo(
+    () =>
+      createGroupActivitiesContext({
+        groupActivitiesMiddleware,
+        groupTimestamp: patchedStyleSet.options.groupTimestamp
+      }),
+    [groupActivitiesMiddleware, patchedStyleSet.options.groupTimestamp]
   );
 
   const hoistedDispatchers = useMemo(
@@ -346,6 +385,63 @@ const Composer = ({
     [telemetryDimensionsRef]
   );
 
+  const patchedActivityRenderer = useMemo(() => {
+    activityRenderer &&
+      console.warn(
+        'Web Chat: "activityRenderer" is deprecated and will be removed on 2020-06-15, please use "activityMiddleware" instead.'
+      );
+
+    return activityRenderer || createActivityRenderer(activityMiddleware);
+  }, [activityMiddleware, activityRenderer]);
+
+  const patchedActivityStatusRenderer = useMemo(() => {
+    activityStatusRenderer &&
+      console.warn(
+        'Web Chat: "activityStatusRenderer" is deprecated and will be removed on 2020-06-15, please use "activityStatusMiddleware" instead.'
+      );
+
+    return activityStatusRenderer || createActivityStatusRenderer(activityStatusMiddleware);
+  }, [activityStatusMiddleware, activityStatusRenderer]);
+
+  const patchedAttachmentRenderer = useMemo(() => {
+    attachmentRenderer &&
+      console.warn(
+        'Web Chat: "attachmentRenderer" is deprecated and will be removed on 2020-06-15, please use "attachmentMiddleware" instead.'
+      );
+
+    return attachmentRenderer || createAttachmentRenderer(attachmentMiddleware);
+  }, [attachmentMiddleware, attachmentRenderer]);
+
+  const patchedAvatarRenderer = useMemo(() => {
+    avatarRenderer &&
+      console.warn(
+        'Web Chat: "avatarRenderer" is deprecated and will be removed on 2020-06-15, please use "avatarMiddleware" instead.'
+      );
+
+    return avatarRenderer || createAvatarRenderer(avatarMiddleware);
+  }, [avatarMiddleware, avatarRenderer]);
+
+  const patchedToastRenderer = useMemo(() => {
+    toastRenderer &&
+      console.warn(
+        'Web Chat: "toastRenderer" is deprecated and will be removed on 2020-06-15, please use "toastMiddleware" instead.'
+      );
+
+    return toastRenderer || createToastRenderer(toastMiddleware);
+  }, [toastMiddleware, toastRenderer]);
+
+  const patchedTypingIndicatorRenderer = useMemo(() => {
+    typingIndicatorRenderer &&
+      console.warn(
+        'Web Chat: "typingIndicatorRenderer" is deprecated and will be removed on 2020-06-15, please use "typingIndicatorMiddleware" instead.'
+      );
+
+    return typingIndicatorRenderer || createTypingIndicatorRenderer(typingIndicatorMiddleware);
+  }, [typingIndicatorMiddleware, typingIndicatorRenderer]);
+
+  const transcriptActivityElementsRef = useRef([]);
+  const transcriptRootElementRef = useRef();
+
   // This is a heavy function, and it is expected to be only called when there is a need to recreate business logic, e.g.
   // - User ID changed, causing all send* functions to be updated
   // - send
@@ -361,11 +457,12 @@ const Composer = ({
     () => ({
       ...cardActionContext,
       ...focusContext,
+      ...groupActivitiesContext,
       ...hoistedDispatchers,
-      activityRenderer,
-      activityStatusRenderer,
-      attachmentRenderer,
-      avatarRenderer,
+      activityRenderer: patchedActivityRenderer,
+      activityStatusRenderer: patchedActivityStatusRenderer,
+      attachmentRenderer: patchedAttachmentRenderer,
+      avatarRenderer: patchedAvatarRenderer,
       dictateAbortable,
       dir: patchedDir,
       directLine,
@@ -378,52 +475,59 @@ const Composer = ({
       localizedStrings: patchedLocalizedStrings,
       onTelemetry,
       renderMarkdown,
-      scrollToEnd,
       selectVoice: patchedSelectVoice,
-      sendBoxRef,
+      sendBoxFocusRef,
       sendTypingIndicator,
       setDictateAbortable,
-      trackDimension,
       styleOptions,
       styleSet: patchedStyleSet,
+      suggestedActionsAccessKey,
       telemetryDimensionsRef,
-      toastRenderer,
-      typingIndicatorRenderer,
+      toastRenderer: patchedToastRenderer,
+      trackDimension,
+      transcriptActivityElementsRef,
+      transcriptFocusRef,
+      transcriptRootElementRef,
+      typingIndicatorRenderer: patchedTypingIndicatorRenderer,
       userID,
       username,
       webSpeechPonyfill
     }),
     [
-      activityRenderer,
-      activityStatusRenderer,
-      attachmentRenderer,
-      avatarRenderer,
       cardActionContext,
       dictateAbortable,
       directLine,
       disabled,
       focusContext,
+      groupActivitiesContext,
       hoistedDispatchers,
       internalMarkdownIt,
       internalRenderMarkdownInline,
       locale,
       localizedGlobalize,
       onTelemetry,
+      patchedActivityRenderer,
+      patchedActivityStatusRenderer,
+      patchedAttachmentRenderer,
+      patchedAvatarRenderer,
       patchedDir,
       patchedGrammars,
       patchedLocalizedStrings,
       patchedSelectVoice,
-      sendTypingIndicator,
       patchedStyleSet,
+      patchedToastRenderer,
+      patchedTypingIndicatorRenderer,
       renderMarkdown,
-      scrollToEnd,
-      sendBoxRef,
+      sendBoxFocusRef,
+      sendTypingIndicator,
       setDictateAbortable,
-      trackDimension,
       styleOptions,
+      suggestedActionsAccessKey,
       telemetryDimensionsRef,
-      toastRenderer,
-      typingIndicatorRenderer,
+      trackDimension,
+      transcriptActivityElementsRef,
+      transcriptFocusRef,
+      transcriptRootElementRef,
       userID,
       username,
       webSpeechPonyfill
@@ -456,9 +560,7 @@ const ComposeWithStore = ({ onTelemetry, store, ...props }) => {
     <ErrorBoundary onError={handleError}>
       <Provider context={WebChatReduxContext} store={memoizedStore}>
         <ScrollToBottomComposer>
-          <ScrollToBottomFunctionContext.Consumer>
-            {({ scrollToEnd }) => <Composer onTelemetry={onTelemetry} scrollToEnd={scrollToEnd} {...props} />}
-          </ScrollToBottomFunctionContext.Consumer>
+          <Composer onTelemetry={onTelemetry} {...props} />
         </ScrollToBottomComposer>
       </Provider>
     </ErrorBoundary>
@@ -483,9 +585,13 @@ export default ComposeWithStore;
 //       We should decide which data is needed for React but not in other environment such as CLI/VSCode
 
 Composer.defaultProps = {
+  activityMiddleware: undefined,
   activityRenderer: undefined,
+  activityStatusMiddleware: undefined,
   activityStatusRenderer: undefined,
+  attachmentMiddleware: undefined,
   attachmentRenderer: undefined,
+  avatarMiddleware: undefined,
   avatarRenderer: undefined,
   cardActionMiddleware: undefined,
   children: undefined,
@@ -493,19 +599,21 @@ Composer.defaultProps = {
   disabled: false,
   extraStyleSet: undefined,
   grammars: [],
+  groupActivitiesMiddleware: undefined,
   groupTimestamp: undefined,
   locale: window.navigator.language || 'en-US',
-  mainFocusRef: undefined,
   onTelemetry: undefined,
   overrideLocalizedStrings: undefined,
   renderMarkdown: undefined,
   selectVoice: undefined,
-  sendBoxRef: undefined,
   sendTimeout: undefined,
   sendTypingIndicator: false,
   styleOptions: {},
   styleSet: undefined,
+  suggestedActionsAccessKey: 'A a Å å',
+  toastMiddleware: undefined,
   toastRenderer: undefined,
+  typingIndicatorMiddleware: undefined,
   typingIndicatorRenderer: undefined,
   userID: '',
   username: '',
@@ -513,9 +621,13 @@ Composer.defaultProps = {
 };
 
 Composer.propTypes = {
+  activityMiddleware: PropTypes.func,
   activityRenderer: PropTypes.func,
+  activityStatusMiddleware: PropTypes.func,
   activityStatusRenderer: PropTypes.func,
+  attachmentMiddleware: PropTypes.func,
   attachmentRenderer: PropTypes.func,
+  avatarMiddleware: PropTypes.func,
   avatarRenderer: PropTypes.func,
   cardActionMiddleware: PropTypes.func,
   children: PropTypes.any,
@@ -536,24 +648,21 @@ Composer.propTypes = {
   disabled: PropTypes.bool,
   extraStyleSet: PropTypes.any,
   grammars: PropTypes.arrayOf(PropTypes.string),
+  groupActivitiesMiddleware: PropTypes.func,
   groupTimestamp: PropTypes.oneOfType([PropTypes.bool, PropTypes.number]),
   locale: PropTypes.string,
-  mainFocusRef: PropTypes.shape({
-    current: PropTypes.any
-  }),
   onTelemetry: PropTypes.func,
   overrideLocalizedStrings: PropTypes.oneOfType([PropTypes.any, PropTypes.func]),
   renderMarkdown: PropTypes.func,
-  scrollToEnd: PropTypes.func.isRequired,
   selectVoice: PropTypes.func,
-  sendBoxRef: PropTypes.shape({
-    current: PropTypes.any
-  }),
   sendTimeout: PropTypes.number,
   sendTypingIndicator: PropTypes.bool,
   styleOptions: PropTypes.any,
   styleSet: PropTypes.any,
+  suggestedActionsAccessKey: PropTypes.oneOfType([PropTypes.oneOf([false]), PropTypes.string]),
+  toastMiddleware: PropTypes.func,
   toastRenderer: PropTypes.func,
+  typingIndicatorMiddleware: PropTypes.func,
   typingIndicatorRenderer: PropTypes.func,
   userID: PropTypes.string,
   username: PropTypes.string,

@@ -1,15 +1,15 @@
-import BasicWebChat from './BasicWebChat';
+import ReactWebChat from './ReactWebChat';
 
 import Composer from './Composer';
 
+import BasicWebChat from './BasicWebChat';
+
 import Avatar from './Activity/Avatar';
 import Bubble from './Activity/Bubble';
-import CarouselLayout from './Activity/CarouselLayout';
 import ErrorBox from './ErrorBox';
 import Localize, { localize } from './Localization/Localize';
 import SendStatus, { connectSendStatus } from './Middleware/ActivityStatus/SendStatus/SendStatus';
 import SpeakActivity, { connectSpeakActivity } from './Activity/Speak';
-import StackedLayout, { connectStackedLayout } from './Activity/StackedLayout';
 import Timestamp from './Middleware/ActivityStatus/Timestamp';
 
 import AudioContent from './Attachment/AudioContent';
@@ -43,6 +43,7 @@ import * as hooks from './hooks/index';
 const version = process.env.npm_package_version;
 
 const Components = {
+  BasicWebChat,
   Composer,
   Localize,
 
@@ -59,16 +60,13 @@ const Components = {
   // Components for recomposing transcript
   Avatar,
   Bubble,
-  CarouselLayout,
   ErrorBox,
   SendStatus,
   SpeakActivity,
-  StackedLayout,
   Timestamp,
 
   connectSendStatus,
   connectSpeakActivity,
-  connectStackedLayout,
 
   // Components for recomposing send box
   DictationInterims,
@@ -86,7 +84,7 @@ const Components = {
   connectUploadButton
 };
 
-export default BasicWebChat;
+export default ReactWebChat;
 
 export {
   Components,

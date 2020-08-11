@@ -18,6 +18,10 @@ This repo is part of the [Microsoft Bot Framework](https://github.com/microsoft/
 
 > This section points out important version notes. For further information, please see the related links and check the [`CHANGELOG.md`](https://github.com/microsoft/BotFramework-WebChat/blob/master/CHANGELOG.md)
 
+## Direct Line Speech support in Web Chat 4.7.0
+
+Starting from Web Chat 4.7.0, Direct Line Speech is supported, and it is the preferred way to provide an integrated speech functionality in Web Chat. We are working on [closing feature gaps](https://github.com/microsoft/BotFramework-WebChat/labels/Direct%20Line%20Speech) between Direct Line Speech and Web Speech API (includes Cognitive Services and browser-provided speech functionality).
+
 ## Upgrading to 4.6.0
 
 Starting from Web Chat 4.6.0, Web Chat requires React 16.8.6 or up.
@@ -144,6 +148,38 @@ export default () => {
 
 See the working sample of [Web Chat rendered via React](https://github.com/microsoft/BotFramework-WebChat/tree/master/samples/01.getting-started/e.host-with-react/).
 
+### Experimental support for Redux DevTools
+
+Web Chat internally use Redux for state management. [Redux DevTools](https://github.com/reduxjs/redux-devtools) is enabled in the NPM build as an opt-in feature.
+
+This is for glancing into how Web Chat works. This is not an API explorer and is not an endorsement of using the Redux store to programmatically access the UI. The [hooks API](https://github.com/microsoft/BotFramework-WebChat/tree/master/docs/HOOKS.md) should be used instead.
+
+To use Redux DevTools, use the `createStoreWithDevTools` function for creating a Redux DevTools-enabled store.
+
+<!-- prettier-ignore-start -->
+```diff
+  import React, { useMemo } from 'react';
+- import ReactWebChat, { createDirectLine, createStore } from 'botframework-webchat';
++ import ReactWebChat, { createDirectLine, createStoreWithDevTools } from 'botframework-webchat';
+
+  export default () => {
+    const directLine = useMemo(() => createDirectLine({ token: 'YOUR_DIRECT_LINE_TOKEN' }), []);
+-   const store = useMemo(() => createStore(), []);
++   const store = useMemo(() => createStoreWithDevTools(), []);
+
+    return <ReactWebChat directLine={directLine} store={store} userID="YOUR_USER_ID" />;
+  };
+```
+<!-- prettier-ignore-end -->
+
+There are some limitations when using the Redux DevTools:
+
+- The Redux store uses side-effects via [`redux-saga`](https://github.com/redux-saga/redux-saga). Time-traveling may break the UI.
+- Many UI states are stored in React context and state. They are not exposed in the Redux store.
+- Some time-sensitive UIs are based on real-time clock and not affected by time-traveling.
+- Dispatching actions are not officially supported. Please use [hooks API](https://github.com/microsoft/BotFramework-WebChat/tree/master/docs/HOOKS.md) instead.
+- Actions and reducers may move in and out of Redux store across versions. [Hooks API](https://github.com/microsoft/BotFramework-WebChat/tree/master/docs/HOOKS.md) is the official API for accessing the UI.
+
 # Customizing the Web Chat UI
 
 Web Chat is designed to be customizable without forking the source code. The table below outlines what kind of customizations you can achieve when you are importing Web Chat in different ways. This list is not exhaustive.
@@ -200,9 +236,25 @@ View the [notification documentation](https://github.com/microsoft/BotFramework-
 
 View the [telemetry documentation](https://github.com/microsoft/BotFramework-WebChat/tree/master/docs/TELEMETRY.md) for implementing in Web Chat.
 
-## Speech: Integrate with Cognitive Services Speech Services
+## Speech
 
-You can use Cognitive Services Speech Services to add bi-directional speech functionality to Web Chat. Please refer to the [Cognitive Services Speech Services](https://github.com/microsoft/BotFramework-WebChat/blob/master/docs/SPEECH.md) documentation for details.
+Web Chat supports a wide-range of speech engines for a natural chat experience with a bot. This section outlines the different engines that are supported:
+
+-  [Direct Line Speech](#integrate-with-direct-line-speech)
+-  [Cognitive Services Speech Services](#integrate-with-cognitive-services-speech-services)
+-  [Browser-provided engine or other engines](#browser-provided-engine-or-other-engines)
+
+### Integrate with Direct Line Speech
+
+Direct Line Speech is the preferred way to add speech functionality in Web Chat. Please refer to the [Direct Line Speech](https://github.com/microsoft/BotFramework-WebChat/blob/master/docs/DIRECT_LINE_SPEECH.md) documentation for details.
+
+### Integrate with Cognitive Services Speech Services
+
+You can use Cognitive Services Speech Services to add speech functionality to Web Chat. Please refer to the [Cognitive Services Speech Services](https://github.com/microsoft/BotFramework-WebChat/blob/master/docs/SPEECH.md) documentation for details.
+
+### Browser-provided engine or other engines
+
+You can also use any speech engines which support [W3C Web Speech API standard](https://wicg.github.io/speech-api/). Some browsers support the [Speech Recognition API](https://caniuse.com/#feat=mdn-api_speechrecognition) and the [Speech Synthesis API](https://caniuse.com/#feat=mdn-api_speechsynthesis). You can mix-and-match different engines - including Cognitive Services Speech Services - to provide best user experience.
 
 <hr />
 
